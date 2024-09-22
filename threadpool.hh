@@ -25,6 +25,7 @@ enum class PoolMode {
 // 线程类型
 class Thread {
 public:
+    void start();
 private:
 };
 
@@ -36,14 +37,28 @@ public:
 
     // 设置线程池的工作模式
     void setMode(PoolMode mode);
+    // 设置初始的线程数量
+    void setInitThreadSize(int size);
+    // 设置任务队列上限阈值
+    void setTaskqueMaxThreshHold(int threshhold);
+    // 给线程池提交任务
+    void submitTask(std::shared_ptr<Task> sptr);
     // 开启线程池
-    void start();
+    void start(int initThreshSize=4);
+
+    // 防止用户copy线程池
+    ThreadPool(const ThreadPool&) = delete;
+    ThreadPool& operator=(const ThreadPool&) = delete;
 
 private:
-    std::vector<Thread*> thread_; // 线程列表
+    // 定义线程函数
+    void threadFunc();
+
+private:
+    std::vector<Thread*> threads_; // 线程列表
     std::size_t init_thread_size_;     // 初始的线程数量
     // 防止用户传递临时对象，用智能指针延长生命周期
-    std::queue<std::shared_ptr<Task>> task_que_; // 任务队列
+    std::queue<std::shared_ptr<Task>> taskque_; // 任务队列
     std::atomic_uint task_size_;    // 任务数量
     int taskque_max_threshhold_;    // 任务队列数量上限阈值
 
