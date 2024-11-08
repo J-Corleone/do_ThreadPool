@@ -6,6 +6,7 @@
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
+#include <functional>
 
 
 // 任务抽象基类
@@ -22,11 +23,21 @@ enum class PoolMode {
     MODE_CACHED,// 线程数量可动态增长
 };
 
-// 线程类型
+// 线程类
+/**
+ * 线程函数 没法写在thread类中，因为线程相关的变量全在 threadpool 里(而且是private, 更不能写成全局函数)
+ */
 class Thread {
 public:
+    using ThreadFunc = std::function<void()>;
+
+    Thread(ThreadFunc func);
+    ~Thread();
+
+    // start thread
     void start();
 private:
+    ThreadFunc func_;
 };
 
 // 线程池类型
@@ -37,21 +48,26 @@ public:
 
     // 设置线程池的工作模式
     void setMode(PoolMode mode);
-    // 设置初始的线程数量
-    void setInitThreadSize(int size);
+
     // 设置任务队列上限阈值
     void setTaskqueMaxThreshHold(int threshhold);
+    
     // 给线程池提交任务
     void submitTask(std::shared_ptr<Task> sptr);
-    // 开启线程池
+    
+    // 启动 线程池
     void start(int initThreshSize=4);
 
-    // 防止用户copy线程池
+    // 防止对线程池本身copy
     ThreadPool(const ThreadPool&) = delete;
     ThreadPool& operator=(const ThreadPool&) = delete;
 
 private:
-    // 定义线程函数
+    /** 
+     * 在线程池中定义 线程执行函数
+     * 线程 执行什么样的函数由 线程池 指定
+     * 将来线程函数访问的变量也都在该线程池对象中（一切都理所当然）
+     */
     void threadFunc();
 
 private:
