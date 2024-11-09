@@ -26,17 +26,29 @@ void ThreadPool::setTaskqueMaxThreshHold(int threshhold) {
 }
 
 void ThreadPool::submitTask(std::shared_ptr<Task> sptr) {
-    // 获取锁
+    // 1.获取锁
     std::unique_lock<std::mutex> lock(taskque_mutx_);
 
-    // 线程通信  等待Taskque有空余
-    not_full_.wait(lock, [&]()->bool { return taskque_.size() < taskque_max_threshhold_; });
+    // 2.1 线程通信  等待Taskque有空余
+    /** 
+     * 2.2 用户提交任务，最长不能超过1s，否则判提交任务失败，返回
+     * 
+     * wait       - 等待条件满足，等待期间自动 unlock
+     * wait_for   - 等待一段时间
+     * wait_until - 一直等到某个时刻
+     */
+    if(!not_full_.wait_for(lock, std::chrono::seconds(1),
+        [&]()->bool { return taskque_.size() < (size_t)taskque_max_threshhold_; })) {
+        // 说明 not_full_ 等待1s，条件仍然没有满足
+        std::cerr << "task queue is full, submit task failed.\n";
+        return;
+    }
 
-    // 如果有空余，把任务放入Taskque中
+    // 3.如果有空余，把任务放入Taskque中
     taskque_.emplace(sptr);
     task_size_++;
 
-    // 因为新放了任务，任务队列肯定不空，在notEmpty上进行通知，赶快分配线程执行任务
+    // 4. 因为新放了任务，任务队列肯定不空，在notEmpty上进行通知，赶快分配线程执行任务
     not_empty_.notify_all();
 }
 
@@ -65,6 +77,7 @@ void ThreadPool::start(int initThreshSize) {
  * 线程池的所有线程从任务队列消费任务
  */
 void ThreadPool::threadFunc() {
+/*
     std::cout << "begin threadFunc tid: "
               << std::this_thread::get_id() 
               << std::endl;
@@ -72,6 +85,33 @@ void ThreadPool::threadFunc() {
     std::cout << "end threadFunc tid: "
               << std::this_thread::get_id() 
               << std::endl;
+*/
+    for (;;) {
+        std::shared_ptr<Task> task;
+        {
+            // 1.先获取锁
+            std::unique_lock<std::mutex> lock(taskque_mutx_);
+
+            // 2.等待任务队列不空, not_empty_ 条件
+            not_empty_.wait(lock, [&]()->bool { return taskque_.size() > 0; });
+
+            // 3.如果不空，从任务队列取一个任务
+            task = taskque_.front();
+            taskque_.pop();
+            task_size_--;
+
+            // 3.1 如果队列还有任务，继续通知其它的线程
+            if (taskque_.size() > 0)
+                not_empty_.notify_all();
+
+            // 3.2 取出一个任务，在 not_full_ 上通知，可以继续提交生产任务
+            not_full_.notify_all();
+
+        }   // 4.弄个作用域，取出任务后就需要释放锁了
+
+        // 5.当前线程执行这个任务
+        if (task != nullptr) task->run();
+    }
 }
 
 

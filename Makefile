@@ -4,7 +4,7 @@ INC = $(wildcard $(DIR)/*.hh)
 SRCS = $(wildcard $(DIR)/*.cc)
 
 CXX := g++ -std=c++17
-CXXFLAGS :=
+CXXFLAGS := -Wall
 
 OBJDIR := obj
 OBJS := $(patsubst $(DIR)/%.cc, $(OBJDIR)/%.o, $(SRCS))
