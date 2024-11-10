@@ -58,6 +58,34 @@ private:
     std::unique_ptr<Base> base_;
 };
 
+// 信号量类
+class Semaphore {
+public:
+    Semaphore(int limit = 0) : resLimit_(limit) {}
+    ~Semaphore() = default;
+
+    // 消耗一个信号量资源
+    void wait() {
+        std::unique_lock<std::mutex> lock(mtx_);
+        // 等待信号量有资源，没有则 block
+        cond_.wait(lock, [&]()->bool { return resLimit_ > 0; });
+        resLimit_--;
+    }
+
+    // 增加一个信号量资源
+    void post() {
+        std::unique_lock<std::mutex> lock(mtx_);
+        resLimit_++;
+        // 有资源了需要通知
+        cond_.notify_all();
+    }
+
+private:
+    int resLimit_;
+    std::mutex mtx_;
+    std::condition_variable cond_;
+};
+
 // 任务抽象基类
 class Task {
 public:
