@@ -4,7 +4,7 @@
 
 #include <iostream>
 
-const int Task_max_threshhold = 1024;
+const int Task_max_threshhold = 3;
 
 ThreadPool::ThreadPool():
     init_thread_size_(0),
@@ -91,9 +91,13 @@ void ThreadPool::threadFunc() {
         {
             // 1.先获取锁
             std::unique_lock<std::mutex> lock(taskque_mutx_);
+            std::cout << "tid: " << std::this_thread::get_id()
+                      << " 获取任务中...\n";
 
             // 2.等待任务队列不空, not_empty_ 条件
             not_empty_.wait(lock, [&]()->bool { return taskque_.size() > 0; });
+            std::cout << "tid: " << std::this_thread::get_id()
+                      << " 获取任务成功...\n";
 
             // 3.如果不空，从任务队列取一个任务
             task = taskque_.front();

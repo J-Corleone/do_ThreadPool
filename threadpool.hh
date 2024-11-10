@@ -8,12 +8,61 @@
 #include <condition_variable>
 #include <functional>
 
+// Any类：接收任意类型的数据
+class Any {
+public:
+    Any() = default;
+    ~Any() = default;
+    Any(const Any&) = delete;
+    Any& operator=(const Any&) = delete;
+    Any(Any&&) = default;
+    Any& operator=(Any&&) = default;
+
+    // 该 ctor 让 Any 接收任意类型的其它数据
+    template<typename T>
+    Any(T data) : base_(std::make_unique<Derive<T>>(data)) {}
+    
+    // 该函数把 Any 对象存储的 data 提取出来
+    template <typename T>
+    T cast_() {
+        // 从 base_ 找到它指向的 Derive 类对象，从它里面取出 data 成员变量
+        // 基类指针 -> 派生类指针 RTTI
+        Derive<T> *pd = dynamic_cast<Derive<T>*>(base_.get());
+        
+        // 如果类型不对，抛出异常
+        if (pd == nullptr)
+            throw "type is unmatched!";
+        
+        // 类型对，用派生类指针调用派生类成员
+        return pd->data_;
+    }
+
+private:
+    // 基类类型
+    class Base {
+    public:
+        virtual ~Base() = default;
+    };
+
+    // 派生类类型
+    template<typename T>
+    class Derive : public Base {
+    public:
+        Derive(T data) : data_(data) {}
+        
+        T data_;
+    };
+
+private:
+    // 定义一个基类指针
+    std::unique_ptr<Base> base_;
+};
 
 // 任务抽象基类
 class Task {
 public:
     // 用户可以自定义任意任务类型，从Task继承，重写run方法, 实现自定义任务处理
-    virtual void run() = 0;
+    virtual Any run() = 0;
 private:
 };
 
@@ -39,6 +88,20 @@ public:
 private:
     ThreadFunc func_;
 };
+
+/*
+e.g.
+ThreadPool pool;
+pool.start();
+
+class MyTask: public Task {
+public:
+    void run() {}
+};
+
+pool.submitTask(std::make_shared<MyTask>());
+
+*/
 
 // 线程池类型
 class ThreadPool {
