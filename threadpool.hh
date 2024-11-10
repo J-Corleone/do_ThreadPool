@@ -86,12 +86,40 @@ private:
     std::condition_variable cond_;
 };
 
+class Task;
+// 实现接收 提交到线程池的task执行完后的 返回值类型 Result
+class Result {
+public:
+    Result(std::shared_ptr<Task> task, bool is_valid = true);
+    ~Result() = default;
+
+    // Q1 - get_val方法，获取 task 执行完的返回值
+    void get_val(Any any);
+    // Q2 - get方法，用户调用这个方法获取 task 的返回值
+    Any get();
+
+private:
+    Any any_;       // 存储任务的返回值
+    Semaphore sem_; // 线程通信信号量
+    std::shared_ptr<Task> task_; // 指向获取返回值的task对象
+    std::atomic_bool is_valid_;  // 返回值是否有效
+};
+
 // 任务抽象基类
 class Task {
 public:
+    Task();
+    ~Task() = default;
+
     // 用户可以自定义任意任务类型，从Task继承，重写run方法, 实现自定义任务处理
     virtual Any run() = 0;
+
+    void set_result(Result *res);
+    void exec();
+
 private:
+    // 不能放Result对象，因为它的生命周期要  > task
+    Result *result_; // 不能用智能指针，会导致交叉引用
 };
 
 // 线程池支持的模式
@@ -144,7 +172,7 @@ public:
     void setTaskqueMaxThreshHold(int threshhold);
     
     // 给线程池提交任务     用户调用该接口，传入任务对象，"生产任务"
-    void submitTask(std::shared_ptr<Task> sptr);
+    Result submitTask(std::shared_ptr<Task> sptr);
     
     // 启动 线程池
     void start(int initThreshSize=4);

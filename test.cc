@@ -5,6 +5,8 @@
 
 #include <iostream>
 
+using namespace std;
+
 /* 
 需求 - 有些场景，希望获得线程执行任务的返回值
 e.g.    1 + ... + 30000 的和
@@ -17,8 +19,12 @@ main thread:
 + 等待他们算完返回结果，合并最终结果
 */
 
+using uLong = unsigned long long;
+
 class MyTask : public Task {
 public:
+    MyTask(int begin, int end) : begin_(begin), end_(end) {}
+
     /**
      *  Q1 - 怎么设计 run() 的返回值，可以表示任意类型？
      *  模板用不了，因为 虚函数 和 模板 不能一起用（编译时没有类型实例，没有真正的函数，抽象基类的虚表 就放不了 虚函数地址）
@@ -28,10 +34,19 @@ public:
     Any run() {
         std::cout << "tid: " << std::this_thread::get_id()
                   << " begin!\n";
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+        // std::this_thread::sleep_for(std::chrono::seconds(5));
+        uLong sum = 0;
+        for (int i = begin_; i <= end_; i++)
+            sum += (uLong)i;
+
         std::cout << "tid: " << std::this_thread::get_id()
                   << " end!\n";
+
+        return sum;
     }
+private:
+    int begin_;
+    int end_;
 };
 
 int main() {
@@ -49,17 +64,26 @@ int main() {
      *  + 线程没执行完时，阻塞在这
      *  res.get();  
      *  + 执行完时，拿到返回值，需要转为具体类型
-     *  auto val = res.get.cast_<T>();  这个类型要用户自己指定（因为是用户传的任务）
+     *  auto val = res.get().cast_<T>();  这个类型要用户自己指定（因为是用户传的任务）
      */ 
+    Result res1 = p.submitTask(std::make_shared<MyTask>(1, 100000000));
+    Result res2 = p.submitTask(std::make_shared<MyTask>(100000001, 200000000));
+    Result res3 = p.submitTask(std::make_shared<MyTask>(200000001, 300000000));
 
-    p.submitTask(std::make_shared<MyTask>());
-    p.submitTask(std::make_shared<MyTask>());
-    p.submitTask(std::make_shared<MyTask>());
-    p.submitTask(std::make_shared<MyTask>());
-    p.submitTask(std::make_shared<MyTask>());
-    p.submitTask(std::make_shared<MyTask>());
-    p.submitTask(std::make_shared<MyTask>());
-    p.submitTask(std::make_shared<MyTask>());
+    uLong sum1 = res1.get().cast_<ulong>();
+    uLong sum2 = res2.get().cast_<uLong>();
+    uLong sum3 = res3.get().cast_<uLong>();
+    
+    cout << sum1 + sum2 + sum3 << endl;
+    
+    // p.submitTask(std::make_shared<MyTask>());
+    // p.submitTask(std::make_shared<MyTask>());
+    // p.submitTask(std::make_shared<MyTask>());
+    // p.submitTask(std::make_shared<MyTask>());
+    // p.submitTask(std::make_shared<MyTask>());
+    // p.submitTask(std::make_shared<MyTask>());
+    // p.submitTask(std::make_shared<MyTask>());
+    // p.submitTask(std::make_shared<MyTask>());
 
     getchar();
 }
