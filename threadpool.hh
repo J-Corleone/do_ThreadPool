@@ -170,6 +170,9 @@ public:
 
     // 设置任务队列上限阈值
     void setTaskqueMaxThreshHold(int threshhold);
+
+    // 设置线程池cached模式下 线程的阈值（让用户设置：有的服务器内存大，有的小）
+    void setThreadThreshHold(int threshhold);
     
     // 给线程池提交任务     用户调用该接口，传入任务对象，"生产任务"
     Result submitTask(std::shared_ptr<Task> sptr);
@@ -189,11 +192,18 @@ private:
      */
     void threadFunc();
 
+    // 检查 pool 的运行状态
+    bool check_running_state() const;
+
 private:
     // std::vector<Thread*> threads_;      // 线程列表
 
     std::vector<std::unique_ptr<Thread>> threads_;  // 线程列表
     std::size_t init_thread_size_;      // 初始的线程数量
+    int thread_max_threshhold_;         // cached模式下 线程阈值（资源不是无限的）
+    std::atomic_int cur_thread_size_;   // 记录线程池的实际线程数量
+    std::atomic_int idle_thread_num_;   // 记录空闲线程的数量
+
     // 防止用户传递临时对象，用智能指针延长生命周期
     std::queue<std::shared_ptr<Task>> taskque_; // 任务队列
     std::atomic_uint task_size_;        // 任务数量
@@ -204,4 +214,5 @@ private:
     std::condition_variable not_empty_; // 表示任务队列不空
 
     PoolMode pool_mode_;                // 当前线程池的工作模式
+    std::atomic_bool is_pool_running_;  // 表示线程池当前的启动状态
 };

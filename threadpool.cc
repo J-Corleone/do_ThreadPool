@@ -5,23 +5,39 @@
 #include <iostream>
 
 const int Task_max_threshhold = 3;
+const int Thread_max_threshhold = 10;
 
 ThreadPool::ThreadPool():
     init_thread_size_(0),
     task_size_(0),
+    idle_thread_num_(0),
+    cur_thread_size_(0),
     taskque_max_threshhold_(Task_max_threshhold),
-    pool_mode_(PoolMode::MODE_FIXED) {
+    thread_max_threshhold_(Thread_max_threshhold),
+    pool_mode_(PoolMode::MODE_FIXED),
+    is_pool_running_(false) {
 
 }
 
 ThreadPool::~ThreadPool() {}
 
 void ThreadPool::setMode(PoolMode mode) {
+    if (check_running_state()) return;
+
     pool_mode_ = mode;
 }
 
 void ThreadPool::setTaskqueMaxThreshHold(int threshhold) {
+    if (check_running_state()) return;
+
     taskque_max_threshhold_ = threshhold;
+}
+
+void ThreadPool::setThreadThreshHold(int threshhold) {
+    if (check_running_state()) return;
+    if (pool_mode_ == PoolMode::MODE_FIXED) return;
+
+    thread_max_threshhold_ = threshhold;
 }
 
 Result ThreadPool::submitTask(std::shared_ptr<Task> sptr) {
@@ -45,7 +61,7 @@ Result ThreadPool::submitTask(std::shared_ptr<Task> sptr) {
          *  return task->getResult(); X
          *  不能用这种方法，因为 task对象 在线程函数中执行完就析构了
          */
-        return Result(sptr, false); // 返回的临时对象，(c++17以上)自动匹配 移动copy和assign
+        return Result(sptr, false); // 返回的临时对象，会自动匹配"移动copy和assign"(>=c++17)
     }
 
     // 3.如果有空余，把任务放入Taskque中
@@ -55,14 +71,27 @@ Result ThreadPool::submitTask(std::shared_ptr<Task> sptr) {
     // 4. 因为新放了任务，任务队列肯定不空，在notEmpty上进行通知，赶快分配线程执行任务
     not_empty_.notify_all();
 
-    // *cached 模式下，根据任务数量和空闲线程数量，判断是否需要创建新的线程？
+    // *cached 模式 任务处理比较紧急 场景：根据任务数量和空闲线程数量，判断是否需要创建新的线程？
+    if (PoolMode::MODE_CACHED == pool_mode_
+        && task_size_ > idle_thread_num_
+        && cur_thread_size_ < Thread_max_threshhold) {
+
+            // 创建新线程
+            auto ptr = std::make_shared<Thread>(std::bind(threadFunc, this));
+            threads_.emplace_back(std::move(ptr));
+        }
 
     // 返回 Result 对象
     return Result(sptr);
 }
 
 void ThreadPool::start(int initThreshSize) {
+    // 设置线程池运行状态
+    is_pool_running_ = true;
+
+    // 记录初始线程数
     init_thread_size_ = initThreshSize;
+    cur_thread_size_ = initThreshSize;
 
     /** 
      * 创建线程对象
@@ -79,6 +108,12 @@ void ThreadPool::start(int initThreshSize) {
     // 启动所有线程: std::vector<Thread*> threads_;
     for (uint32_t i=0; i<init_thread_size_; i++) {
         threads_[i]->start();   // 会去执行一个线程函数
+
+        idle_thread_num_++;     // 启动一个增加一个空闲线程
+                                /**
+                                 * 感觉不对啊？start是执行线程函数去了，线程函数里面执行结束也会++
+                                 * 线程函数会先--，好像又没问题？
+                                 */
     }
 }
 
@@ -106,7 +141,9 @@ void ThreadPool::threadFunc() {
             // *cached模式下，可能已经创建了很多线程，但是空闲时间超过60s，应该把多余的线程结束回收掉
 
             // 2.等待任务队列不空, not_empty_ 条件
-            not_empty_.wait(lock, [&]()->bool { return taskque_.size() > 0; });
+            not_empty_.wait(lock, [&]()->bool { return taskque_.size() > 0; }); // 有🔒, so size of task can be indicated by taskque_.size()
+            idle_thread_num_--;
+
             std::cout << "tid: " << std::this_thread::get_id()
                       << " 获取任务成功...\n";
 
@@ -128,9 +165,14 @@ void ThreadPool::threadFunc() {
         if (task != nullptr)
             // task->run(); 执行任务，并把任务返回值get_val给到Result
             task->exec();
+    
+        idle_thread_num_++;
     }
 }
 
+bool ThreadPool::check_running_state() const {
+    return is_pool_running_;
+}
 
 /*** 线程方法实现 **************************************/
 
