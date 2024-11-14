@@ -51,6 +51,7 @@ private:
 
 int main() {
     ThreadPool p;
+    // *用户自己设置线程池的工作模式？(*代表第二轮思考)
     p.start(3);
 
     // 由于 线程函数 是分离执行，main线程不能执行的太快，否则看不到东西
@@ -63,18 +64,23 @@ int main() {
      *  
      *  + 线程没执行完时，阻塞在这
      *  res.get();  
-     *  + 执行完时，拿到返回值，需要转为具体类型
+     *  + 执行完时，拿到返回值，怎么转为具体类型？
      *  auto val = res.get().cast_<T>();  这个类型要用户自己指定（因为是用户传的任务）
      */ 
     Result res1 = p.submitTask(std::make_shared<MyTask>(1, 100000000));
     Result res2 = p.submitTask(std::make_shared<MyTask>(100000001, 200000000));
     Result res3 = p.submitTask(std::make_shared<MyTask>(200000001, 300000000));
 
-    uLong sum1 = res1.get().cast_<ulong>();
+    uLong sum1 = res1.get().cast_<uLong>();
     uLong sum2 = res2.get().cast_<uLong>();
     uLong sum3 = res3.get().cast_<uLong>();
     
     cout << sum1 + sum2 + sum3 << endl;
+
+    uLong sum = 0;
+    for (int i=0; i <= 300000000; i++)
+        sum += i;
+    cout << sum << endl;
     
     // p.submitTask(std::make_shared<MyTask>());
     // p.submitTask(std::make_shared<MyTask>());

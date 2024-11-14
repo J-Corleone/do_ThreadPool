@@ -55,6 +55,8 @@ Result ThreadPool::submitTask(std::shared_ptr<Task> sptr) {
     // 4. 因为新放了任务，任务队列肯定不空，在notEmpty上进行通知，赶快分配线程执行任务
     not_empty_.notify_all();
 
+    // *cached 模式下，根据任务数量和空闲线程数量，判断是否需要创建新的线程？
+
     // 返回 Result 对象
     return Result(sptr);
 }
@@ -100,6 +102,8 @@ void ThreadPool::threadFunc() {
             std::unique_lock<std::mutex> lock(taskque_mutx_);
             std::cout << "tid: " << std::this_thread::get_id()
                       << " 获取任务中...\n";
+
+            // *cached模式下，可能已经创建了很多线程，但是空闲时间超过60s，应该把多余的线程结束回收掉
 
             // 2.等待任务队列不空, not_empty_ 条件
             not_empty_.wait(lock, [&]()->bool { return taskque_.size() > 0; });
