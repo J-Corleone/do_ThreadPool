@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <unordered_map>
 #include <queue>
 #include <memory>
 #include <atomic>
@@ -134,15 +135,20 @@ enum class PoolMode {
  */
 class Thread {
 public:
-    using ThreadFunc = std::function<void()>;
+    using ThreadFunc = std::function<void(int)>;
 
     Thread(ThreadFunc func);
     ~Thread();
 
     // start thread
     void start();
+
+    int getId() const;
+
 private:
     ThreadFunc func_;
+    static int genert_id_;
+    int thread_id_;
 };
 
 /*
@@ -190,24 +196,25 @@ private:
      * 线程 执行什么样的函数由 线程池 指定
      * 将来线程函数访问的变量也都在该线程池对象中（一切都理所当然）
      */
-    void threadFunc();
+    void threadFunc(int thread_id);
 
     // 检查 pool 的运行状态
     bool check_running_state() const;
 
 private:
-    // std::vector<Thread*> threads_;      // 线程列表
-
-    std::vector<std::unique_ptr<Thread>> threads_;  // 线程列表
+    // std::vector<Thread*> threads_;                   // 线程列表
+    // std::vector<std::unique_ptr<Thread>> threads_;   // 线程列表
+    std::unordered_map<int, std::unique_ptr<Thread>> threads_; // 线程列表
+    
     std::size_t init_thread_size_;      // 初始的线程数量
-    int thread_max_threshhold_;         // cached模式下 线程阈值（资源不是无限的）
-    std::atomic_int cur_thread_size_;   // 记录线程池的实际线程数量
-    std::atomic_int idle_thread_num_;   // 记录空闲线程的数量
+    uint thread_max_threshhold_;         // cached模式下 线程阈值（资源不是无限的）
+    std::atomic_uint cur_thread_size_;   // 记录线程池的实际线程数量
+    std::atomic_uint idle_thread_num_;   // 记录空闲线程的数量
 
     // 防止用户传递临时对象，用智能指针延长生命周期
     std::queue<std::shared_ptr<Task>> taskque_; // 任务队列
     std::atomic_uint task_size_;        // 任务数量
-    int taskque_max_threshhold_;        // 任务队列数量上限阈值
+    uint taskque_max_threshhold_;        // 任务队列数量上限阈值
 
     std::mutex taskque_mutx_;           // 保证任务队列的线程安全
     std::condition_variable not_full_;  // 表示任务队列不满
