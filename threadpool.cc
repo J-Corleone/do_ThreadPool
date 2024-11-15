@@ -4,9 +4,9 @@
 
 #include <iostream>
 
-const int Task_max_threshhold = 3;
-const int Thread_max_threshhold = 10;
-const int Thread_max_time = 60;
+const int Task_max_threshhold = INT32_MAX;
+const int Thread_max_threshhold = 1024;
+const int Thread_max_idle_time = 60;
 
 ThreadPool::ThreadPool():
     init_thread_size_(0),
@@ -52,10 +52,11 @@ Result ThreadPool::submitTask(std::shared_ptr<Task> sptr) {
      * wait_until - 一直等到某个时刻
      */
     if(!not_full_.wait_for(lock, std::chrono::seconds(1),
-        [&]()->bool { return taskque_.size() < (size_t)taskque_max_threshhold_; })) {
+        [&]()->bool { return taskque_.size() < taskque_max_threshhold_; })) {
         // 说明 not_full_ 等待1s，条件仍然没有满足
-        std::cerr << "task queue is full, submit task failed.\n";
-        
+        std::cerr << "task queue is full, submit task failed." << std::endl;
+        printf("taskque_.size(): %ld --- task_threshhold: %d\n", taskque_.size(), taskque_max_threshhold_);
+
         /**
          *  return task->getResult(); X
          *  不能用这种方法，因为 task对象 在线程函数中执行完就析构了
@@ -73,14 +74,19 @@ Result ThreadPool::submitTask(std::shared_ptr<Task> sptr) {
     // *cached 模式 任务处理比较紧急 场景：根据任务数量和空闲线程数量，判断是否需要创建新的线程？
     if (PoolMode::MODE_CACHED == pool_mode_
         && task_size_ > idle_thread_num_
-        && cur_thread_size_ < Thread_max_threshhold) {
+        && cur_thread_size_ < thread_max_threshhold_) {
+
+            std::cout << ">>> create new thread..." << std::endl;
 
             // 创建新线程
             auto ptr = std::make_unique<Thread>(std::bind(&ThreadPool::threadFunc, this, std::placeholders::_1));
             int tid = ptr->getId();
             threads_.emplace(tid, std::move(ptr));
-
+            // 启动线程
+            threads_[tid]->start();
+            // 修改线程个数相关的变量
             cur_thread_size_++; // 记得增加
+            idle_thread_num_++; 
         }
 
     // 返回 Result 对象
@@ -111,7 +117,7 @@ void ThreadPool::start(int initThreadSize) {
     }
 
     // 启动所有线程: std::vector<Thread*> threads_;
-    for (uint32_t i=0; i<init_thread_size_; i++) {
+    for (uint i=0; i < init_thread_size_; i++) {
         threads_[i]->start();   // 会去执行一个线程函数
 
         idle_thread_num_++;     // 启动一个增加一个空闲线程
@@ -139,28 +145,32 @@ void ThreadPool::threadFunc(int thread_id) {
             // *cached模式下，可能已经创建了很多线程，但是空闲时间超过60s，应该把多余的(超过init_thread_size_数量)线程结束回收掉
             // 当前时间 - 线程上次执行结束的时间 > 60s
             if (PoolMode::MODE_CACHED == pool_mode_) {
-                // ❓没有任务就不删除了吗？
-                while (taskque_.size() > 0) {
+                // 没有任务的时候等待，并检查
+                while (taskque_.size() == 0) {
                     /** 每一秒检查一次
                      *  区分：超时返回 | 有任务等待返回
                      */
                     if (std::cv_status::timeout ==
                         not_empty_.wait_for(lock, std::chrono::seconds(1))) {
                         // 如果没拿到任务就检查空闲时间
-                        auto cur_time = std::chrono::high_resolution_clock::now();
-                        auto dur = std::chrono::duration_cast<std::chrono::seconds>(cur_time - last_time);
-                        if (dur.count() > Thread_max_time
+                        auto now = std::chrono::high_resolution_clock::now();
+                        auto dur = std::chrono::duration_cast<std::chrono::seconds>(now - last_time);
+                        if (dur.count() >= Thread_max_idle_time
                             && cur_thread_size_ > init_thread_size_) {
                             /** 开始回收当前线程
                              *  修改 记录线程数量的相关变量值
                              *  把线程对象从线程列表中删除    如何将 threadFunc <=> thread 对应起来？
                              *  thread_id => thread对象 => 删除
                              */
-                            
+                            threads_.erase(thread_id);
+                            cur_thread_size_--;
+                            idle_thread_num_--;
+
+                            std::cout << "thread: " << std::this_thread::get_id()
+                                      << " exit." << std::endl;
+                            return;
                         }
                     }
-                    
-
                 }
             } else {
                 // 2.等待任务队列不空, not_empty_ 条件

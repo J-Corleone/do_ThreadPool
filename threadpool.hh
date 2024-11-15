@@ -148,7 +148,7 @@ public:
 private:
     ThreadFunc func_;
     static int genert_id_;
-    int thread_id_;
+    int thread_id_; // 保存线程id
 };
 
 /*

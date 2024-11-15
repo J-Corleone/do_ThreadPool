@@ -34,7 +34,7 @@ public:
     Any run() {
         std::cout << "tid: " << std::this_thread::get_id()
                   << " begin!\n";
-        // std::this_thread::sleep_for(std::chrono::seconds(5));
+        std::this_thread::sleep_for(std::chrono::seconds(3));
         uLong sum = 0;
         for (int i = begin_; i <= end_; i++)
             sum += (uLong)i;
@@ -50,11 +50,13 @@ private:
 };
 
 int main() {
+    // *Q - ThreadPool对象析构后，怎么回收线程相关的资源？
     ThreadPool p;
     /**
      *  *用户自己设置线程池的工作模式(*代表第二轮思考)
      *  保证启动后不允许用户设置模式？
      */
+    p.setMode(PoolMode::MODE_CACHED);
     p.start(3);
 
     // 由于 线程函数 是分离执行，main线程不能执行的太快，否则看不到东西
@@ -73,26 +75,20 @@ int main() {
     Result res1 = p.submitTask(std::make_shared<MyTask>(1, 100000000));
     Result res2 = p.submitTask(std::make_shared<MyTask>(100000001, 200000000));
     Result res3 = p.submitTask(std::make_shared<MyTask>(200000001, 300000000));
+    p.submitTask(std::make_shared<MyTask>(100000001, 200000000));
+    p.submitTask(std::make_shared<MyTask>(100000001, 200000000));
 
-    uLong sum1 = res1.get().cast_<uLong>();
-    uLong sum2 = res2.get().cast_<uLong>();
-    uLong sum3 = res3.get().cast_<uLong>();
+    // uLong sum1 = res1.get().cast_<uLong>();
+    // uLong sum2 = res2.get().cast_<uLong>();
+    // uLong sum3 = res3.get().cast_<uLong>();
     
-    cout << sum1 + sum2 + sum3 << endl;
+    // cout << sum1 + sum2 + sum3 << endl;
 
-    uLong sum = 0;
-    for (int i=0; i <= 300000000; i++)
-        sum += i;
-    cout << sum << endl;
-    
-    // p.submitTask(std::make_shared<MyTask>());
-    // p.submitTask(std::make_shared<MyTask>());
-    // p.submitTask(std::make_shared<MyTask>());
-    // p.submitTask(std::make_shared<MyTask>());
-    // p.submitTask(std::make_shared<MyTask>());
-    // p.submitTask(std::make_shared<MyTask>());
-    // p.submitTask(std::make_shared<MyTask>());
-    // p.submitTask(std::make_shared<MyTask>());
+    // uLong sum = 0;
+    // for (int i=0; i <= 300000000; i++)
+    //     sum += i;
+    // cout << sum << endl;
+ 
 
     getchar();
 }
