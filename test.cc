@@ -50,45 +50,46 @@ private:
 };
 
 int main() {
-    // *Q - ThreadPool对象析构后，怎么回收线程相关的资源？
-    ThreadPool p;
-    /**
-     *  *用户自己设置线程池的工作模式(*代表第二轮思考)
-     *  保证启动后不允许用户设置模式？
-     */
-    p.setMode(PoolMode::MODE_CACHED);
-    p.start(3);
+    {
+        // *Q - ThreadPool对象析构后，怎么回收线程相关的资源？
+        ThreadPool p;
+        /**
+         *  *用户自己设置线程池的工作模式(*代表第二轮思考)
+         *  保证启动后不允许用户设置模式？
+         */
+        p.setMode(PoolMode::MODE_CACHED);
+        p.start(3);
 
-    // 由于 线程函数 是分离执行，main线程不能执行的太快，否则看不到东西
-    // std::this_thread::sleep_for(std::chrono::seconds(3));
+        // 由于 线程函数 是分离执行，main线程不能执行的太快，否则看不到东西
+        // std::this_thread::sleep_for(std::chrono::seconds(3));
 
 
-    /**
-     *  Q2 - 如何设计这里的 Result 机制？
-     *  Result res = p.submitTask(std::make_shared<MyTask>());
-     *  
-     *  + 线程没执行完时，阻塞在这
-     *  res.get();  
-     *  + 执行完时，拿到返回值，怎么转为具体类型？
-     *  auto val = res.get().cast_<T>();  这个类型要用户自己指定（因为是用户传的任务）
-     */ 
-    Result res1 = p.submitTask(std::make_shared<MyTask>(1, 100000000));
-    Result res2 = p.submitTask(std::make_shared<MyTask>(100000001, 200000000));
-    Result res3 = p.submitTask(std::make_shared<MyTask>(200000001, 300000000));
-    p.submitTask(std::make_shared<MyTask>(100000001, 200000000));
-    p.submitTask(std::make_shared<MyTask>(100000001, 200000000));
+        /**
+         *  Q2 - 如何设计这里的 Result 机制？
+         *  Result res = p.submitTask(std::make_shared<MyTask>());
+         *  
+         *  + 线程没执行完时，阻塞在这
+         *  res.get();  
+         *  + 执行完时，拿到返回值，怎么转为具体类型？
+         *  auto val = res.get().cast_<T>();  这个类型要用户自己指定（因为是用户传的任务）
+         */ 
+        Result res1 = p.submitTask(std::make_shared<MyTask>(1, 100000000));
+        Result res2 = p.submitTask(std::make_shared<MyTask>(100000001, 200000000));
+        Result res3 = p.submitTask(std::make_shared<MyTask>(200000001, 300000000));
+        p.submitTask(std::make_shared<MyTask>(100000001, 200000000));
+        p.submitTask(std::make_shared<MyTask>(100000001, 200000000));
 
-    // uLong sum1 = res1.get().cast_<uLong>();
-    // uLong sum2 = res2.get().cast_<uLong>();
-    // uLong sum3 = res3.get().cast_<uLong>();
-    
-    // cout << sum1 + sum2 + sum3 << endl;
+        uLong sum1 = res1.get().cast_<uLong>();
+        uLong sum2 = res2.get().cast_<uLong>();
+        uLong sum3 = res3.get().cast_<uLong>();
+        
+        cout << sum1 + sum2 + sum3 << endl;
 
-    // uLong sum = 0;
-    // for (int i=0; i <= 300000000; i++)
-    //     sum += i;
-    // cout << sum << endl;
+        // uLong sum = 0;
+        // for (int i=0; i <= 300000000; i++)
+        //     sum += i;
+        // cout << sum << endl;
+    }
  
-
     getchar();
 }

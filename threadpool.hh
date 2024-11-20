@@ -219,6 +219,7 @@ private:
     std::mutex taskque_mutx_;           // 保证任务队列的线程安全
     std::condition_variable not_full_;  // 表示任务队列不满
     std::condition_variable not_empty_; // 表示任务队列不空
+    std::condition_variable exit_cond_; // 等待线程资源全部回收
 
     PoolMode pool_mode_;                // 当前线程池的工作模式
     std::atomic_bool is_pool_running_;  // 表示线程池当前的启动状态

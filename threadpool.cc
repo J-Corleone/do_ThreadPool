@@ -18,7 +18,19 @@ ThreadPool::ThreadPool():
     pool_mode_(PoolMode::MODE_FIXED),
     is_pool_running_(false) {}
 
-ThreadPool::~ThreadPool() {}
+ThreadPool::~ThreadPool() {
+    is_pool_running_ = false;
+    // 析构时唤醒所有的线程
+    not_empty_.notify_all();
+
+    /** 等待线程池里面所有的线程返回 有两种状态：阻塞 & 正在执行任务中
+     *  涉及到不同线程池的通信（用户的线程，线程池的线程）：condition_variable
+     * 
+     *  回收时需要notify一下，否则会阻塞在这
+    */
+    std::unique_lock<std::mutex> lock(taskque_mutx_);
+    exit_cond_.wait(lock, [&]()->bool { return threads_.size() == 0; });
+}
 
 void ThreadPool::setMode(PoolMode mode) {
     if (check_running_state()) return;
@@ -134,7 +146,7 @@ void ThreadPool::start(int initThreadSize) {
 void ThreadPool::threadFunc(int thread_id) {
     auto last_time = std::chrono::high_resolution_clock::now();
 
-    for (;;) {
+    while (is_pool_running_) {
         std::shared_ptr<Task> task;
         {
             // 1.先获取锁
@@ -142,11 +154,11 @@ void ThreadPool::threadFunc(int thread_id) {
             std::cout << "tid: " << std::this_thread::get_id()
                       << " 获取任务中...\n";
 
-            // *cached模式下，可能已经创建了很多线程，但是空闲时间超过60s，应该把多余的(超过init_thread_size_数量)线程结束回收掉
-            // 当前时间 - 线程上次执行结束的时间 > 60s
-            if (PoolMode::MODE_CACHED == pool_mode_) {
-                // 没有任务的时候等待，并检查
-                while (taskque_.size() == 0) {
+            // 没有任务的时候等待，并检查
+            while (taskque_.size() == 0) {
+                // *cached模式下，可能已经创建了很多线程，但是空闲时间超过60s，应该把多余的(超过init_thread_size_数量)线程结束回收掉
+                // 当前时间 - 线程上次执行结束的时间 > 60s
+                if (PoolMode::MODE_CACHED == pool_mode_) {
                     /** 每一秒检查一次
                      *  区分：超时返回 | 有任务等待返回
                      */
@@ -170,11 +182,23 @@ void ThreadPool::threadFunc(int thread_id) {
                                       << " exit." << std::endl;
                             return;
                         }
-                    }
+                    } 
+                } else {
+                    // 2.等待任务队列不空, not_empty_ 条件
+                    not_empty_.wait(lock);
                 }
-            } else {
-                // 2.等待任务队列不空, not_empty_ 条件
-                not_empty_.wait(lock, [&]()->bool { return taskque_.size() > 0; }); // 有🔒, so size of task can be indicated by taskque_.size()
+
+                /** 没有任务时 检查启动状态，提前回收线程
+                 *  然后在 exit_cond_ 上通知一下
+                 */
+                if (!is_pool_running_) {
+                    threads_.erase(thread_id);
+                    exit_cond_.notify_all();
+                    std::cout << "thread: " << std::this_thread::get_id()
+                              << " exit." << std::endl;
+
+                    return;
+                }
             }
 
             idle_thread_num_--;
@@ -205,6 +229,12 @@ void ThreadPool::threadFunc(int thread_id) {
         
         last_time = std::chrono::high_resolution_clock::now();  // 线程结束，重新记录last_time
     }
+
+    // 跳出循环也要回收
+    threads_.erase(thread_id);
+    exit_cond_.notify_all();
+    std::cout << "thread: " << std::this_thread::get_id()
+              << " exit." << std::endl;
 }
 
 bool ThreadPool::check_running_state() const {
