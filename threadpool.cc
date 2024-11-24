@@ -147,7 +147,7 @@ void ThreadPool::start(int initThreadSize) {
 void ThreadPool::threadFunc(int thread_id) {
     auto last_time = std::chrono::high_resolution_clock::now();
 
-    while (is_pool_running_) {
+    for (;;) {
         std::shared_ptr<Task> task;
         {
             // 1.先获取锁
@@ -155,9 +155,19 @@ void ThreadPool::threadFunc(int thread_id) {
             std::cout << "tid: " << std::this_thread::get_id()
                       << " 获取任务中...\n";
 
-            /* 🔒 + 双重判断（避免第一种死锁） */
+            /* 有任务时就一直执行 */
             // 没有任务的时候等待，并检查
-            while (is_pool_running_ && taskque_.size() == 0) {
+            while (taskque_.size() == 0) {
+                /* 🔒 + 双重判断（避免第一种死锁） */
+                if (!is_pool_running_) {
+                    threads_.erase(thread_id);
+                    exit_cond_.notify_all();
+                    std::cout << "thread: " << std::this_thread::get_id()
+                            << " exit." << std::endl;
+                    
+                    return;
+                }
+
                 // *cached模式下，可能已经创建了很多线程，但是空闲时间超过60s，应该把多余的(超过init_thread_size_数量)线程结束回收掉
                 // 当前时间 - 线程上次执行结束的时间 > 60s
                 if (PoolMode::MODE_CACHED == pool_mode_) {
@@ -189,22 +199,7 @@ void ThreadPool::threadFunc(int thread_id) {
                     // 2.等待任务队列不空, not_empty_ 条件
                     not_empty_.wait(lock);
                 }
-
-                /** 没有任务时 检查启动状态，提前回收线程
-                 *  然后在 exit_cond_ 上通知一下
-                 */
-                // if (!is_pool_running_) {
-                //     threads_.erase(thread_id);
-                //     exit_cond_.notify_all();
-                //     std::cout << "thread: " << std::this_thread::get_id()
-                //               << " exit." << std::endl;
-
-                //     return;
-                // }
             }
-            // 启动状态为 false 时，跳出循环
-            if (!is_pool_running_)
-                break;
 
             idle_thread_num_--;
 
@@ -234,14 +229,6 @@ void ThreadPool::threadFunc(int thread_id) {
         
         last_time = std::chrono::high_resolution_clock::now();  // 线程结束，重新记录last_time
     }
-
-    // ~~跳出循环也要回收~~
-    // 在跳出循环后回收
-    threads_.erase(thread_id);
-    // 打印放在中间，不然notify后析构那边直接结束了
-    std::cout << "thread: " << std::this_thread::get_id()
-              << " exit." << std::endl;
-    exit_cond_.notify_all();
 }
 
 bool ThreadPool::check_running_state() const {

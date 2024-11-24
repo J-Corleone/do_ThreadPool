@@ -59,9 +59,9 @@ int main() {
         p.submitTask(std::make_shared<MyTask>(100000001, 200000000));
         p.submitTask(std::make_shared<MyTask>(100000001, 200000000));
         
-        uLong sum1 = res1.get().cast_<uLong>(); 
+        // uLong sum1 = res1.get().cast_<uLong>(); 
         
-        std::cout << sum1 << endl;
+        // std::cout << sum1 << endl;
     }
     std::cout << "========== Main Over! ===========\n";
 
