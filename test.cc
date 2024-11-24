@@ -34,7 +34,7 @@ public:
     Any run() {
         std::cout << "tid: " << std::this_thread::get_id()
                   << " begin!\n";
-        std::this_thread::sleep_for(std::chrono::seconds(3));
+        std::this_thread::sleep_for(std::chrono::seconds(1));
         uLong sum = 0;
         for (int i = begin_; i <= end_; i++)
             sum += (uLong)i;
@@ -50,6 +50,22 @@ private:
 };
 
 int main() {
+    {
+        ThreadPool p;
+        p.setMode(PoolMode::MODE_CACHED);
+        p.start(2);
+        Result res1 = p.submitTask(std::make_shared<MyTask>(1, 100000000));
+        p.submitTask(std::make_shared<MyTask>(100000001, 200000000));
+        p.submitTask(std::make_shared<MyTask>(100000001, 200000000));
+        p.submitTask(std::make_shared<MyTask>(100000001, 200000000));
+        
+        uLong sum1 = res1.get().cast_<uLong>(); 
+        
+        std::cout << sum1 << endl;
+    }
+    std::cout << "========== Main Over! ===========\n";
+
+#if 0
     {
         // *Q - ThreadPool对象析构后，怎么回收线程相关的资源？
         ThreadPool p;
@@ -69,7 +85,7 @@ int main() {
          *  Result res = p.submitTask(std::make_shared<MyTask>());
          *  
          *  + 线程没执行完时，阻塞在这
-         *  res.get();  
+         *  res.get();
          *  + 执行完时，拿到返回值，怎么转为具体类型？
          *  auto val = res.get().cast_<T>();  这个类型要用户自己指定（因为是用户传的任务）
          */ 
@@ -90,6 +106,7 @@ int main() {
         //     sum += i;
         // cout << sum << endl;
     }
- 
+#endif
+    
     getchar();
 }
